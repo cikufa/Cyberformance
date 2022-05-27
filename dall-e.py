@@ -29,16 +29,18 @@ from PIL import Image
 # #!pip install torch==1.7.1{torch_version_suffix} torchvision==0.8.2{torch_version_suffix} -f https://download.pytorch.org/whl/torch_stable.html ftfy regex
 
 import os
-biggan_cache = "workspace"
-if os.path.isdir("bbiggan-deep-512"):
+biggan_cache = "workspace/biggan-deep-512"
+if os.path.isfile("biggan-128.pt"):
   print("found biggan")
-  gan_model= 'biggan-deep-512/07b5c0d1791fa2028f8aa458a36360f31e1549d44152c96579b3ad6b35055d34.c33e135ad91e13528d0b83edc3c53c7bf94f620bdf8bc2bf08be82ba6d602e62'
-  gan_path ="workspace/biggan-deep-512"
-  gan_model = BigGAN.from_pretrained(gan_path, local_files_only=True)
+  #gan_model= 'biggan-deep-512/07b5c0d1791fa2028f8aa458a36360f31e1549d44152c96579b3ad6b35055d34.c33e135ad91e13528d0b83edc3c53c7bf94f620bdf8bc2bf08be82ba6d602e62'
+  #gan_path ="workspace/biggan-deep-512"
+  #gan_model = BigGAN.from_pretrained(gan_path, local_files_only=True)
+  gan_model= torch.load('biggan-128.pt')
   print("biggan loaded")
 else:
   print("downloading biggan...")
   gan_model = BigGAN.from_pretrained('biggan-deep-128', biggan_cache).cuda().eval()
+  torch.save(gan_model, 'biggan-128.pt')
   print("biggan downloaded")
 
 import os 
@@ -130,7 +132,7 @@ def ascend_txt(prompt,prompt_num, i):
     p_s.append(apper)
   into = nom(torch.cat(p_s, 0))
 
-  predict_clip = perceptor[model].encode_image(into)
+  predict_clip = perceptor.encode(into)
   factor = 100
   loss = factor*(1-torch.cosine_similarity(predict_clip, target_clip, dim=-1).mean())
   total_loss = loss
@@ -188,8 +190,8 @@ for prompt_num, prompt in enumerate(prompts):
     #target_clip = perceptor.encode_text(tx.cuda())
     target_clip = perceptor.encode(prompt)
   
-  #res = perceptor.visual.input_resolution
-
+  #res = perceptor.input_resolution.item()
+  res = 224
   nom = torchvision.transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
 
   sample_num = 0
