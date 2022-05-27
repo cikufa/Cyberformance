@@ -1,4 +1,5 @@
-# #@title Restart after running this cell!
+#my notes: primpt -> clip.tokenize() ->
+
 import subprocess
 import torch
 import torchvision
@@ -10,6 +11,8 @@ from pytorch_pretrained_biggan import convert_to_images, one_hot_from_names
 from pytorch_pretrained_biggan import BigGAN
 from base64 import b64encode
 from time import time
+from sentence_transformers import SentenceTransformer, util
+from PIL import Image
 
 # CUDA_version = [s for s in subprocess.check_output(["nvcc", "--version"]).decode("UTF-8").split(", ") if s.startswith("release")][0].split(" ")[-1]
 # print("CUDA version:", CUDA_version)
@@ -27,48 +30,48 @@ from time import time
 
 import os
 biggan_cache = "workspace"
-if os.path.isdir("biggan-deep-512"):
+if os.path.isdir("bbiggan-deep-512"):
   print("found biggan")
   gan_model= 'biggan-deep-512/07b5c0d1791fa2028f8aa458a36360f31e1549d44152c96579b3ad6b35055d34.c33e135ad91e13528d0b83edc3c53c7bf94f620bdf8bc2bf08be82ba6d602e62'
+  gan_path ="workspace/biggan-deep-512"
+  gan_model = BigGAN.from_pretrained(gan_path, local_files_only=True)
   print("biggan loaded")
 else:
   print("downloading biggan...")
-  gan_model = BigGAN.from_pretrained('biggan-deep-512', biggan_cache).cuda().eval()
-  print("biggan loaded")
+  gan_model = BigGAN.from_pretrained('biggan-deep-128', biggan_cache).cuda().eval()
+  print("biggan downloaded")
 
 import os 
 from git import Repo
-# if os.path.isdir("clip")==False:
-#   print("cloning")
-#   Repo.clone_from('https://github.com/openai/CLIP', 'content')
-#os.chdir("content")
-# print("afffffffffff", os.getcw/ed())
+
 import clip
-#models = clip.available_models()
-#print(models)
+models = clip.available_models()
+print(models)
 perceptor=None
 preprocess=None
 if os.path.isfile('ViT-B-32.pt'):
   print("loading from saved pickle...")
   perceptor= torch.load('ViT-B-32.pt')
+  print("loaded")
 else:
   print("loading model from clip...")
-  perceptor, preprocess = clip.load('ViT-B/32')
+  #perceptor = SentenceTransformer('clip-ViT-B-32')
+  perceptor, preprocess = clip.load("ViT-B/32", device='cpu')
   print("model loaded")
-  torch.save(perceptor, 'ViT-B-32.pt')
+  torch.save(perceptor, 'clip-ViT-B-32.pt')
+  torch.save(preprocess, 'clip-preprpcess-ViT-B-32.pt')
   print("model saved as pickle")
 
 import nltk
-print("downloading wordnet")
-nltk.download('wordnet')
+#print("downloading wordnet")
+#nltk.download('wordnet')
 
 # #/////////////////////////////////////////////////////////////////////////////////////
-
 # #@markdown 1. For **prompt** OpenAI suggest to use the template "A photo of a X." or "A photo of a X, a type of Y." [[paper]](https://cdn.openai.com/papers/Learning_Transferable_Visual_Models_From_Natural_Language_Supervision.pdf)
 # #@markdown 2. For **initial_class** you can either use free text or select a special option from the drop-down list.
 # #@markdown 3. Free text and 'From prompt' might fail to find an appropriate ImageNet class.
 total=[]
-#prompts = ['A photo of a purple moon in the lake.', 'A photo of a highway to hell.']#, 'A photo of a devil in the shadows.'] #@param {type:'string'}
+prompts = ['A photo of a purple moon in the lake.', 'A photo of a highway to hell.']#, 'A photo of a devil in the shadows.'] #@param {type:'string'}
 #final in /content , every saved pic in content/output ?? 
 
 prompt = 'A photo of a rainbow mushroom.' #@param {type:'string'}
@@ -76,7 +79,6 @@ initial_class = 'Random class' #@param ['From prompt', 'Random class', 'Random D
 optimize_class = True #@param {type:'boolean'}
 class_smoothing = 0.1 #@param {type:'number'}
 truncation = 1 #@param {type:'number'}
-model = 'ViT-B/32' #@param ['ViT-B/32','RN50']
 augmentations =  64#@param {type:'integer'}
 learning_rate = 0.1 #@param {type:'number'}
 class_ent_reg = 0.0001 #@param {type:'number'}
@@ -92,6 +94,7 @@ im_shape = [64, 64, 3]
 sideX, sideY, channels = im_shape
 
 #***********************************************************************************************************
+
 def save(out,name):
   with torch.no_grad():
     al = out.cpu().numpy()
@@ -166,6 +169,7 @@ else:
   except Exception as e:  
     print('Error: could not find initial_class. Try something else.')
     raise e
+
 eps=1e-8
 class_vector = np.log(class_vector+eps)
 
@@ -179,11 +183,12 @@ if optimize_class:
 optimizer = torch.optim.Adam(params, lr=learning_rate)
 
 for prompt_num, prompt in enumerate(prompts):
-  tx = clip.tokenize(prompt)
+  #tx = clip.tokenize(prompt)
   with torch.no_grad():
-    target_clip = perceptor[model].encode_text(tx.cuda())
-
-  res = perceptor[model].visual.input_resolution
+    #target_clip = perceptor.encode_text(tx.cuda())
+    target_clip = perceptor.encode(prompt)
+  
+  #res = perceptor.visual.input_resolution
 
   nom = torchvision.transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
 
@@ -191,9 +196,9 @@ for prompt_num, prompt in enumerate(prompts):
   start = time()
   for i in range(iterations):    
     loss = ascend_txt(prompt, prompt_num, i)
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+    optimizer.zero_grad() #minimize gradian
+    loss.backward() #back prop
+    optimizer.step() #update wrights
   print('took: %d secs (%.2f sec/iter)'%(time()-start,(time()-start)/iterations))
 
   files.download('/content/%s.jpg'%prompt)
@@ -216,3 +221,4 @@ display(HTML("""
 from google.colab import files, output
 output.eval_js('new Audio("https://freesound.org/data/previews/80/80921_1022651-lq.ogg").play()')
 files.download('/content/%s.mp4'%prompt)
+
