@@ -4,12 +4,10 @@ from textwrap3 import fill
 import moviepy.editor as me
 import tempfile
 # import textwrap
-# import glob
+import glob
 import os
 import re
-# import imageio
-# import numpy as np 
-
+import time 
 
 def createvid(description, images, duration, fps=24):
     blackbg = me.ColorClip((720,720), (0, 0, 0))
@@ -34,11 +32,6 @@ def createvid(description, images, duration, fps=24):
     with tempfile.NamedTemporaryFile() as video_tempfile:
         final.write_videofile(video_tempfile.name+".mp4", fps=fps)
         video_tempfile.seek(0)
-
-        for clip in clips:
-            clip.close()
-        for clip in comp_list:
-            clip.close()
         return video_tempfile
 
 def concatvids(descriptions, video_temp_list, audiofilepath=False, fps=24, lyrics=True):
@@ -48,32 +41,7 @@ def concatvids(descriptions, video_temp_list, audiofilepath=False, fps=24, lyric
     #     # desc = desc[1]
         if desc == descriptions[-1][1]:
             break
-    #     # elif desc == "start song":
-    #     #     desc = " "
-    #     # compvid_list.append(blackbg)
         vid = me.VideoFileClip(f'{vid.name}.mp4')#.set_position(('center', 'center'))
-        # compvid_list.append(vid)
-
-        # if len(desc) > 35:
-        #     desc = fill(desc, 35)
-        # if lyrics:
-
-        #     txtClip = me.TextClip(desc, color='white', fontsize=30, font='Amiri-regular').set_position('center')
-        #     txt_col = txtClip.on_color(size=(blackbg.w, txtClip.h + 10),
-        #               color=(0,0,0), pos=('center', 'center'), col_opacity=0.8)
-            
-        #     txt_mov = txt_col.set_position((0, blackbg.h-20-txtClip.h))
-        #     compvid_list.append(txt_mov)
-
-        # video_tempfile = tempfile.NamedTemporaryFile()
-        
-        # final = me.CompositeVideoClip(compvid_list).set_duration(vid.duration)
-        # final.write_videofile(video_tempfile.name+".mp4", fps=fps)
-        # video_tempfile.seek(0)
-        # for clip in clips:
-        #     clip.close()
-        # concat_clip.close()
-
         clips.append(vid)
 
     concat_clip = me.concatenate_videoclips(clips, method="compose").set_position(('center', 'center'))
@@ -81,44 +49,7 @@ def concatvids(descriptions, video_temp_list, audiofilepath=False, fps=24, lyric
     if audiofilepath:
         concat_clip.audio = me.AudioFileClip(audiofilepath)
         concat_clip.duration = concat_clip.audio.duration
-    concat_clip.write_videofile("finaloutput.mp4", fps=fps)
-
-'''    
-#note that duration = 1/interpol
-
-with open('prompt.txt') as f:
-    lines= f.readlines()
-    prompts = [re.findall('(\D*)', l)[0] for l in lines ]
-    print("78")
-    prompt_num= len(prompts)
-    print(80)
-    
-images=[]
-for i in range(prompt_num):
-    images.append(sorted(os.listdir(f'out{prompt_num+1}')))
-    
-ttime = calc_duration()
-
-interpol = 2
-num_imgs =20
-list_info=[]
-with open('info.txt') as f:
-    for pi, p in enumerate(prompts): #4
-        img_per_prompt= interpol * ttime
-        info = f.readlines(img_per_prompt)
-        for i in range(img_per_prompt):
-            info_dict={}
-            info_dict['im']= f'out{prompt_num+1}/' + images[pi][i]
-            info_dict['duration']=re.findall("\d+\.\d+|\d", info[i])[0]
-        #print(info_dict)
-        list_info.append(info_dict)
-        createvid(list_info, p, 24)
-'''
-
-# export FFMPEG_BINARY='/usr/bin/ffmpeg'
-# export IMAGEMAGICK_BINARY='/usr/bin/convert'
-
-import time 
+    concat_clip.write_videofile("finallll.mp4", fps=fps)
 
 def create_strp(d, timeformat):
     return time.mktime(time.strptime(d, timeformat))
@@ -139,13 +70,22 @@ def init_textfile(textfile):
         if descs1[0][0] - firstline[0]:
             descs1.insert(0, firstline)
 
-        lastline = (descs1[-1][0]+9, "end song")
+        lastline = (descs1[-1][0]+1, "end song")
         descs1.append(lastline)   
     return descs1
 
-descs = init_textfile('prompt.txt')
-interpol= 2
-video_temp_list=[]
+def sort(t):
+    path = f'outt/out{t}'
+    num = [re.findall('\d+', im)[0] for im in os.listdir(path)]   
+    num= list(map(int, num))
+    num.sort()
+    imgs = [f'outt/out{t}/frame{i}.png' for i in num]
+    return imgs
+
+descs = init_textfile('shokoo.txt')
+
+interpol= 10
+video_temp_list=[]  
 for idx1, pt in enumerate(descs):
     z1_idx = idx1 + 1
     if z1_idx >= len(descs):
@@ -156,11 +96,11 @@ for idx1, pt in enumerate(descs):
     d2 = descs[z1_idx][0]
     ttime = d2 - d1   
     N = round(ttime * interpol)
-    images =[f'out/out{idx1+1}/'+ sorted(os.listdir(f'out/out{idx1+1}'))[i] for i in range(N)]
-    print(images)
+    # images =[f'outt/out{idx1+1}/'+ os.listdir(f'outt/out{idx1+1}')[i] for i in range(N)]
+    images= sort(idx1+1)
+    # print(images)
+    # print("______________________________________")
     video_temp = createvid(f'{current_lyric}', images, duration=ttime / N)
     video_temp_list.append(video_temp)
 
 concatvids(descs, video_temp_list)
-
-   
